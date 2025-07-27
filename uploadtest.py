@@ -4,14 +4,17 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from xgboost import XGBRegressor
 
 st.title("🔮 Power Demand Forecasting")
 
 # Sidebar: Model selection
-model_type = st.sidebar.selectbox("Choose Forecasting Model", ["SARIMAX", "RandomForest"])
+model_type = st.sidebar.selectbox("Choose Forecasting Model", ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost"])
 st.sidebar.subheader("📊 Accuracy Metrics")
 
 # File uploader
@@ -28,27 +31,35 @@ if uploaded_file is not None:
         series = state_df['Power Demand (MW)'].values[:100]
         train, test = series[:70], series[70:]
 
+        def create_features(data, window=5):
+            X, y = [], []
+            for i in range(window, len(data)):
+                X.append(data[i-window:i])
+                y.append(data[i])
+            return np.array(X), np.array(y)
+
         if model_type == "SARIMAX":
             model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
             model_fit = model.fit(disp=False)
             forecast = model_fit.forecast(steps=30)
         else:
-            def create_features(data, window=5):
-                X, y = [], []
-                for i in range(window, len(data)):
-                    X.append(data[i-window:i])
-                    y.append(data[i])
-                return np.array(X), np.array(y)
-
             scaler = MinMaxScaler()
             scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
             window = 5
             X_train, y_train = create_features(scaled_series[:70], window)
             X_test, y_test = create_features(scaled_series[70-window:100], window)
 
-            rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-            rf_model.fit(X_train, y_train)
-            forecast_scaled = rf_model.predict(X_test)
+            if model_type == "RandomForest":
+                model = RandomForestRegressor(n_estimators=100, random_state=42)
+            elif model_type == "LinearRegression":
+                model = LinearRegression()
+            elif model_type == "SVR":
+                model = SVR(kernel='rbf')
+            elif model_type == "XGBoost":
+                model = XGBRegressor(n_estimators=100, random_state=42)
+
+            model.fit(X_train, y_train)
+            forecast_scaled = model.predict(X_test)
             forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
             test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
