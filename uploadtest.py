@@ -1,21 +1,23 @@
 import streamlit as st
 import pandas as pd
 
-# Set the title of the dashboard
 st.title("Excel Viewer Dashboard")
 
-# File uploader widget
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx", "xls"])
 
-# Check if a file has been uploaded
 if uploaded_file is not None:
     try:
-        # Read the Excel file
-        df = pd.read_excel(uploaded_file)
+        # Try importing openpyxl
+        import openpyxl
 
-        # Display the contents of the Excel file
+        # Read the Excel file
+        df = pd.read_excel(uploaded_file, engine='openpyxl')
+
         st.subheader("Excel File Contents")
         st.dataframe(df)
+
+    except ImportError:
+        st.error("Missing dependency 'openpyxl'. Please install it using `pip install openpyxl`.")
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
 else:
