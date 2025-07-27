@@ -2,6 +2,7 @@ streamlit
 pandas
 openpyxl
 seaborn
+matplotlib
 numpy
 scikit-learn
-statsmodels
+tensorflow
