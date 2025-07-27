@@ -91,4 +91,30 @@ if uploaded_file is not None:
             - Consider feature engineering or using ensemble methods.
             """)
         else:
-            st.sidebar.error("❌ The model may not
+            st.sidebar.error("❌ The model may not be reliable. Consider alternative models or preprocessing.")
+            st.sidebar.markdown("""
+            - R² is very low or negative, indicating poor predictive power.
+            - High RMSE and MAE suggest significant prediction errors.
+            - Model may be underfitting or missing key patterns.
+            - Try using more advanced models or improving data quality.
+            - Consider time series decomposition or external regressors.
+            """)
+
+        # Forecast vs Actual plot
+        st.subheader(f"📈 Forecast vs Actual using {model_type}")
+        plot_df = pd.DataFrame({
+            'Datetime': state_df['Datetime'].values[100 - len(test):100],
+            'Actual': test,
+            'Predicted': forecast
+        })
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.lineplot(data=plot_df, x='Datetime', y='Actual', label='Actual', ax=ax)
+        sns.lineplot(data=plot_df, x='Datetime', y='Predicted', label='Predicted', ax=ax)
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"Error processing the file: {e}")
+else:
+    st.info("Please upload an Excel file to proceed.")
