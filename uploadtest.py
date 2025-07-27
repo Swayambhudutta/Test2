@@ -65,10 +65,28 @@ if uploaded_file is not None:
         st.sidebar.subheader("💡 Insights")
         if r2 > 0.85 and rmse < 100 and mae < 100:
             st.sidebar.success("✅ The model performs well and is suitable for forecasting.")
+            st.sidebar.markdown("""
+            - High R² indicates strong correlation between predictions and actual values.
+            - Low RMSE and MAE suggest minimal prediction error.
+            - Model is reliable for short-term forecasting.
+            """)
         elif r2 > 0.7:
             st.sidebar.warning("⚠️ The model shows moderate accuracy. Consider tuning parameters or using more data.")
+            st.sidebar.markdown("""
+            - R² is acceptable but not ideal for critical forecasting.
+            - RMSE and MAE may still be high, indicating room for improvement.
+            - Try increasing training data or adjusting model parameters.
+            - Consider feature engineering or using ensemble methods.
+            """)
         else:
             st.sidebar.error("❌ The model may not be reliable. Consider alternative models or preprocessing.")
+            st.sidebar.markdown("""
+            - Low R² suggests poor predictive power.
+            - High RMSE and MAE indicate significant errors.
+            - Model may be underfitting or missing key patterns.
+            - Try using more advanced models or improving data quality.
+            - Consider time series decomposition or external regressors.
+            """)
 
         # Forecast vs Actual plot
         st.subheader(f"📈 Forecast vs Actual using {model_type}")
