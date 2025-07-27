@@ -10,9 +10,9 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from xgboost import XGBRegressor
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, GRU, Dense
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
 
 st.title("🔮 Power Demand Forecasting")
 
@@ -35,13 +35,6 @@ if uploaded_file is not None:
         train, test = series[:70], series[70:]
 
         def create_features(data, window=5):
-            X, y = [], []
-            for i in range(window, len(data)):
-                X.append(data[i-window:i])
-                y.append(data[i])
-            return np.array(X), np.array(y)
-
-        def create_dl_features(data, window=5):
             X, y = [], []
             for i in range(window, len(data)):
                 X.append(data[i-window:i])
@@ -76,26 +69,58 @@ if uploaded_file is not None:
             scaler = MinMaxScaler()
             scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
             window = 5
-            X_train, y_train = create_dl_features(scaled_series[:70], window)
-            X_test, y_test = create_dl_features(scaled_series[70-window:100], window)
+            X_train, y_train = create_features(scaled_series[:70], window)
+            X_test, y_test = create_features(scaled_series[70-window:100], window)
 
-            X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
-            X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+            X_train_torch = torch.tensor(X_train, dtype=torch.float32).unsqueeze(-1)
+            y_train_torch = torch.tensor(y_train, dtype=torch.float32).unsqueeze(-1)
+            X_test_torch = torch.tensor(X_test, dtype=torch.float32).unsqueeze(-1)
 
-            model = Sequential()
-            if model_type == "LSTM":
-                model.add(LSTM(50, activation='relu', input_shape=(window, 1)))
-            elif model_type == "GRU":
-                model.add(GRU(50, activation='relu', input_shape=(window, 1)))
-            elif model_type == "Hybrid":
-                model.add(LSTM(50, activation='relu', input_shape=(window, 1)))
-                model.add(Dense(25, activation='relu'))
+            class TimeSeriesModel(nn.Module):
+                def __init__(self, model_type):
+                    super().__init__()
+                    if model_type == "LSTM":
+                        self.rnn = nn.LSTM(input_size=1, hidden_size=50, batch_first=True)
+                    elif model_type == "GRU":
+                        self.rnn = nn.GRU(input_size=1, hidden_size=50, batch_first=True)
+                    elif model_type == "Hybrid":
+                        self.rnn = nn.LSTM(input_size=1, hidden_size=50, batch_first=True)
+                        self.fc1 = nn.Linear(50, 25)
+                        self.fc2 = nn.Linear(25, 1)
+                    else:
+                        raise ValueError("Invalid model type")
 
-            model.add(Dense(1))
-            model.compile(optimizer='adam', loss='mse')
-            model.fit(X_train, y_train, epochs=50, verbose=0)
+                    if model_type != "Hybrid":
+                        self.fc = nn.Linear(50, 1)
 
-            forecast_scaled = model.predict(X_test).flatten()
+                    self.model_type = model_type
+
+                def forward(self, x):
+                    out, _ = self.rnn(x)
+                    out = out[:, -1, :]
+                    if self.model_type == "Hybrid":
+                        out = torch.relu(self.fc1(out))
+                        out = self.fc2(out)
+                    else:
+                        out = self.fc(out)
+                    return out
+
+            model = TimeSeriesModel(model_type)
+            criterion = nn.MSELoss()
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+            for epoch in range(50):
+                model.train()
+                optimizer.zero_grad()
+                output = model(X_train_torch)
+                loss = criterion(output, y_train_torch)
+                loss.backward()
+                optimizer.step()
+
+            model.eval()
+            with torch.no_grad():
+                forecast_scaled = model(X_test_torch).squeeze().numpy()
+
             forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
             test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
@@ -103,7 +128,7 @@ if uploaded_file is not None:
         rmse = np.sqrt(mean_squared_error(test, forecast))
         mae = mean_absolute_error(test, forecast)
         r2_raw = r2_score(test, forecast)
-        r2 = max(0.0, r2_raw)  # Clip negative R² for display
+        r2 = max(0.0, r2_raw)
 
         st.sidebar.write(f"**RMSE**: {rmse:.2f}")
         st.sidebar.write(f"**MAE**: {mae:.2f}")
@@ -145,4 +170,12 @@ if uploaded_file is not None:
         })
 
         fig, ax = plt.subplots(figsize=(12, 6))
-        sns.lineplot(data=plot_df, x
+        sns.lineplot(data=plot_df, x='Datetime', y='Actual', label='Actual', ax=ax)
+        sns.lineplot(data=plot_df, x='Datetime', y='Predicted', label='Predicted', ax=ax)
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"Error processing the file: {e}")
+else:
+    st.info("Please upload an Excel file to proceed.")
