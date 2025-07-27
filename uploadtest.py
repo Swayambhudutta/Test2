@@ -10,14 +10,22 @@ if uploaded_file is not None:
         # Try importing openpyxl
         import openpyxl
 
-        # Read the Excel file
+        # Read the Excel file using openpyxl engine
         df = pd.read_excel(uploaded_file, engine='openpyxl')
 
         st.subheader("Excel File Contents")
         st.dataframe(df)
 
     except ImportError:
-        st.error("Missing dependency 'openpyxl'. Please install it using `pip install openpyxl`.")
+        st.error("Missing dependency 'openpyxl'.")
+        st.markdown("""
+        ### 📦 How to fix this:
+        Run the following command in your terminal:
+        ```bash
+        pip install openpyxl
+        ```
+        After installing, restart the app and try again.
+        """)
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
 else:
