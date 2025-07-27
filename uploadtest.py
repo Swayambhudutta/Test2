@@ -4,6 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+import numpy as np
 
 st.title("🔮 Power Demand Forecasting (Lightweight Model)")
 
@@ -27,7 +28,7 @@ if uploaded_file is not None:
         model_fit = model.fit(disp=False)
         forecast = model_fit.forecast(steps=30)
 
-        rmse = mean_squared_error(test, forecast, squared=False)
+        rmse = np.sqrt(mean_squared_error(test, forecast))
         mae = mean_absolute_error(test, forecast)
         r2 = r2_score(test, forecast)
 
