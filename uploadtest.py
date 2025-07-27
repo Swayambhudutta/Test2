@@ -52,6 +52,7 @@ if uploaded_file is not None:
             forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
             test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
+        # Accuracy metrics
         rmse = np.sqrt(mean_squared_error(test, forecast))
         mae = mean_absolute_error(test, forecast)
         r2 = r2_score(test, forecast)
@@ -60,6 +61,16 @@ if uploaded_file is not None:
         st.sidebar.write(f"**MAE**: {mae:.2f}")
         st.sidebar.write(f"**R² Score**: {r2:.2f}")
 
+        # Insights section
+        st.sidebar.subheader("💡 Insights")
+        if r2 > 0.85 and rmse < 100 and mae < 100:
+            st.sidebar.success("✅ The model performs well and is suitable for forecasting.")
+        elif r2 > 0.7:
+            st.sidebar.warning("⚠️ The model shows moderate accuracy. Consider tuning parameters or using more data.")
+        else:
+            st.sidebar.error("❌ The model may not be reliable. Consider alternative models or preprocessing.")
+
+        # Forecast vs Actual plot
         st.subheader(f"📈 Forecast vs Actual using {model_type}")
         plot_df = pd.DataFrame({
             'Datetime': state_df['Datetime'].values[100 - len(test):100],
