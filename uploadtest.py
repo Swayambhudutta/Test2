@@ -1,38 +1,148 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.preprocessing import MinMaxScaler
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from xgboost import XGBRegressor
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, GRU, Dense
 
-def create_dl_features(data, window=5):
-    X, y = [], []
-    for i in range(window, len(data)):
-        X.append(data[i-window:i])
-        y.append(data[i])
-    return np.array(X), np.array(y)
+st.title("🔮 Power Demand Forecasting")
 
-# Deep Learning Models
-elif model_type in ["LSTM", "GRU", "Hybrid"]:
-    scaler = MinMaxScaler()
-    scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
-    window = 5
-    X_train, y_train = create_dl_features(scaled_series[:70], window)
-    X_test, y_test = create_dl_features(scaled_series[70-window:100], window)
+# Sidebar: Model selection
+model_type = st.sidebar.selectbox("Choose Forecasting Model", ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"])
+st.sidebar.subheader("📊 Accuracy Metrics")
 
-    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
-    X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+# File uploader
+uploaded_file = st.file_uploader("Upload Power Demand Excel File", type=["xlsx"])
 
-    model = Sequential()
-    if model_type == "LSTM":
-        model.add(LSTM(50, activation='relu', input_shape=(window, 1)))
-    elif model_type == "GRU":
-        model.add(GRU(50, activation='relu', input_shape=(window, 1)))
-    elif model_type == "Hybrid":
-        model.add(LSTM(50, activation='relu', input_shape=(window, 1)))
-        model.add(Dense(25, activation='relu'))
+if uploaded_file is not None:
+    try:
+        df = pd.read_excel(uploaded_file, engine='openpyxl')
+        df['Datetime'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str))
+        df.sort_values(by=['State', 'Datetime'], inplace=True)
 
-    model.add(Dense(1))
-    model.compile(optimizer='adam', loss='mse')
-    model.fit(X_train, y_train, epochs=50, verbose=0)
+        state = st.selectbox("Select State", df['State'].unique())
+        state_df = df[df['State'] == state].sort_values('Datetime')
+        series = state_df['Power Demand (MW)'].values[:100]
+        train, test = series[:70], series[70:]
 
-    forecast_scaled = model.predict(X_test).flatten()
-    forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
-    test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+        def create_features(data, window=5):
+            X, y = [], []
+            for i in range(window, len(data)):
+                X.append(data[i-window:i])
+                y.append(data[i])
+            return np.array(X), np.array(y)
+
+        def create_dl_features(data, window=5):
+            X, y = [], []
+            for i in range(window, len(data)):
+                X.append(data[i-window:i])
+                y.append(data[i])
+            return np.array(X), np.array(y)
+
+        if model_type == "SARIMAX":
+            model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
+            model_fit = model.fit(disp=False)
+            forecast = model_fit.forecast(steps=30)
+        elif model_type in ["RandomForest", "LinearRegression", "SVR", "XGBoost"]:
+            scaler = MinMaxScaler()
+            scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
+            window = 5
+            X_train, y_train = create_features(scaled_series[:70], window)
+            X_test, y_test = create_features(scaled_series[70-window:100], window)
+
+            if model_type == "RandomForest":
+                model = RandomForestRegressor(n_estimators=100, random_state=42)
+            elif model_type == "LinearRegression":
+                model = LinearRegression()
+            elif model_type == "SVR":
+                model = SVR(kernel='rbf')
+            elif model_type == "XGBoost":
+                model = XGBRegressor(n_estimators=100, random_state=42)
+
+            model.fit(X_train, y_train)
+            forecast_scaled = model.predict(X_test)
+            forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
+            test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+        elif model_type in ["LSTM", "GRU", "Hybrid"]:
+            scaler = MinMaxScaler()
+            scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
+            window = 5
+            X_train, y_train = create_dl_features(scaled_series[:70], window)
+            X_test, y_test = create_dl_features(scaled_series[70-window:100], window)
+
+            X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
+            X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+
+            model = Sequential()
+            if model_type == "LSTM":
+                model.add(LSTM(50, activation='relu', input_shape=(window, 1)))
+            elif model_type == "GRU":
+                model.add(GRU(50, activation='relu', input_shape=(window, 1)))
+            elif model_type == "Hybrid":
+                model.add(LSTM(50, activation='relu', input_shape=(window, 1)))
+                model.add(Dense(25, activation='relu'))
+
+            model.add(Dense(1))
+            model.compile(optimizer='adam', loss='mse')
+            model.fit(X_train, y_train, epochs=50, verbose=0)
+
+            forecast_scaled = model.predict(X_test).flatten()
+            forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
+            test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+
+        # Accuracy metrics
+        rmse = np.sqrt(mean_squared_error(test, forecast))
+        mae = mean_absolute_error(test, forecast)
+        r2_raw = r2_score(test, forecast)
+        r2 = max(0.0, r2_raw)  # Clip negative R² for display
+
+        st.sidebar.write(f"**RMSE**: {rmse:.2f}")
+        st.sidebar.write(f"**MAE**: {mae:.2f}")
+        st.sidebar.write(f"**R² Score**: {r2:.2f}")
+
+        # Insights section
+        st.sidebar.subheader("💡 Insights")
+        if r2_raw > 0.85 and rmse < 100 and mae < 100:
+            st.sidebar.success("✅ The model performs well and is suitable for forecasting.")
+            st.sidebar.markdown("""
+            - High R² indicates strong correlation between predictions and actual values.
+            - Low RMSE and MAE suggest minimal prediction error.
+            - Model is reliable for short-term forecasting.
+            """)
+        elif r2_raw > 0.7:
+            st.sidebar.warning("⚠️ The model shows moderate accuracy. Consider tuning parameters or using more data.")
+            st.sidebar.markdown("""
+            - R² is acceptable but not ideal for critical forecasting.
+            - RMSE and MAE may still be high, indicating room for improvement.
+            - Try increasing training data or adjusting model parameters.
+            - Consider feature engineering or using ensemble methods.
+            """)
+        else:
+            st.sidebar.error("❌ The model may not be reliable. Consider alternative models or preprocessing.")
+            st.sidebar.markdown("""
+            - R² is very low or negative, indicating poor predictive power.
+            - High RMSE and MAE suggest significant prediction errors.
+            - Model may be underfitting or missing key patterns.
+            - Try using more advanced models or improving data quality.
+            - Consider time series decomposition or external regressors.
+            """)
+
+        # Forecast vs Actual plot
+        st.subheader(f"📈 Forecast vs Actual using {model_type}")
+        plot_df = pd.DataFrame({
+            'Datetime': state_df['Datetime'].values[100 - len(test):100],
+            'Actual': test,
+            'Predicted': forecast
+        })
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.lineplot(data=plot_df, x
