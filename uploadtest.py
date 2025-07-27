@@ -66,7 +66,8 @@ if uploaded_file is not None:
         # Accuracy metrics
         rmse = np.sqrt(mean_squared_error(test, forecast))
         mae = mean_absolute_error(test, forecast)
-        r2 = r2_score(test, forecast)
+        r2_raw = r2_score(test, forecast)
+        r2 = max(0.0, r2_raw)  # Clip negative R² for display
 
         st.sidebar.write(f"**RMSE**: {rmse:.2f}")
         st.sidebar.write(f"**MAE**: {mae:.2f}")
@@ -74,14 +75,14 @@ if uploaded_file is not None:
 
         # Insights section
         st.sidebar.subheader("💡 Insights")
-        if r2 > 0.85 and rmse < 100 and mae < 100:
+        if r2_raw > 0.85 and rmse < 100 and mae < 100:
             st.sidebar.success("✅ The model performs well and is suitable for forecasting.")
             st.sidebar.markdown("""
             - High R² indicates strong correlation between predictions and actual values.
             - Low RMSE and MAE suggest minimal prediction error.
             - Model is reliable for short-term forecasting.
             """)
-        elif r2 > 0.7:
+        elif r2_raw > 0.7:
             st.sidebar.warning("⚠️ The model shows moderate accuracy. Consider tuning parameters or using more data.")
             st.sidebar.markdown("""
             - R² is acceptable but not ideal for critical forecasting.
@@ -90,30 +91,4 @@ if uploaded_file is not None:
             - Consider feature engineering or using ensemble methods.
             """)
         else:
-            st.sidebar.error("❌ The model may not be reliable. Consider alternative models or preprocessing.")
-            st.sidebar.markdown("""
-            - Low R² suggests poor predictive power.
-            - High RMSE and MAE indicate significant errors.
-            - Model may be underfitting or missing key patterns.
-            - Try using more advanced models or improving data quality.
-            - Consider time series decomposition or external regressors.
-            """)
-
-        # Forecast vs Actual plot
-        st.subheader(f"📈 Forecast vs Actual using {model_type}")
-        plot_df = pd.DataFrame({
-            'Datetime': state_df['Datetime'].values[100 - len(test):100],
-            'Actual': test,
-            'Predicted': forecast
-        })
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        sns.lineplot(data=plot_df, x='Datetime', y='Actual', label='Actual', ax=ax)
-        sns.lineplot(data=plot_df, x='Datetime', y='Predicted', label='Predicted', ax=ax)
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-
-    except Exception as e:
-        st.error(f"Error processing the file: {e}")
-else:
-    st.info("Please upload an Excel file to proceed.")
+            st.sidebar.error("❌ The model may not
